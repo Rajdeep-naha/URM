@@ -1,0 +1,15 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
+torchaudio
+transformers
+datasets
+accelerate
+deepspeed
+wandb
+tqdm
+sentencepiece
+tiktoken
+protobuf
+scikit-learn
+matplotlib

@@ -1,0 +1,28 @@
+=== Diagnostic Statistics ===
+URM Mean Sigmas per Attribute:
+  Helpfulness: 0.0198
+  Correctness: 0.4591
+  Coherence: 0.0315
+  Complexity: 0.0701
+  Verbosity: 0.0910
+
+MDN Mean Mixture Variances per Attribute:
+  Helpfulness: 65.6755
+  Correctness: 7671.6816
+  Coherence: 358.1001
+  Complexity: 4.7041
+  Verbosity: 2769.6750
+
+MDN Mean Component Weights (pi) per Attribute:
+  Helpfulness: pi1=0.9523, pi2=0.0425, pi3=0.0052
+  Correctness: pi1=0.0091, pi2=0.0117, pi3=0.9792
+  Coherence: pi1=0.9626, pi2=0.0165, pi3=0.0209
+  Complexity: pi1=0.0161, pi2=0.9703, pi3=0.0136
+  Verbosity: pi1=0.0019, pi2=0.9567, pi3=0.0414
+
+MDN Mean Scale Parameters (s) per Attribute:
+  Helpfulness: s1=4.3348, s2=0.3239, s3=12.9926
+  Correctness: s1=0.1539, s2=13.2886, s3=47.1137
+  Coherence: s1=10.2472, s2=2.8431, s3=0.2968
+  Complexity: s1=26.0585, s2=0.3371, s3=0.1754
+  Verbosity: s1=0.1828, s2=28.2637, s3=0.1984
