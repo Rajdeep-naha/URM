@@ -51,6 +51,11 @@ class URMMDNHead(nn.Module):
                 bias_reshaped[:, 1].fill_(0.5)
             else:
                 bias_reshaped = self.proj.bias.view(self.num_attributes, 3, self.num_components)
+                # Spaced initialization for component means: Component 1 = -2.0, Component 2 = 0.0, Component 3 = 2.0
+                bias_reshaped[:, 1, 0].fill_(-2.0)
+                bias_reshaped[:, 1, 1].fill_(0.0)
+                bias_reshaped[:, 1, 2].fill_(2.0)
+                # Scale initialization components slightly positive to avoid near-zero scales
                 bias_reshaped[:, 2, :].fill_(0.5)
 
     def forward(self, hidden_states):
@@ -97,6 +102,11 @@ class URMMDNHead(nn.Module):
             logits_pi = out[:, :, :, 0, :]
             mu = out[:, :, :, 1, :]
             raw_s = out[:, :, :, 2, :]
+
+            # Sort component means and gather weights/scales using the same ordering
+            mu, sort_indices = torch.sort(mu, dim=-1)
+            logits_pi = torch.gather(logits_pi, dim=-1, index=sort_indices)
+            raw_s = torch.gather(raw_s, dim=-1, index=sort_indices)
 
             pi = F.softmax(logits_pi, dim=-1)
             s = F.softplus(raw_s) + 1e-6

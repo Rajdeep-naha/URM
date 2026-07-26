@@ -82,7 +82,27 @@ def parse_args():
     parser.add_argument("--uncertainty_target", type=str, default="label", choices=["label", "residual"],
                         help="Target target for the MDN head (raw labels or residuals after mean prediction)")
     parser.add_argument("--lambda_nll", type=float, default=1.0, help="Loss weight scale coefficient for NLL term in residual target mode")
+    parser.add_argument("--lambda_entropy", type=float, default=0.0, help="Optional entropy regularization weight; keep at 0 until mixture usefulness is verified")
+    parser.add_argument("--lambda_repulsive", type=float, default=0.0, help="Optional repulsive mean-loss weight; keep at 0 until collapse remains after ordering/init fixes")
     return parser.parse_args()
+
+
+def compute_mixture_entropy(pi: torch.Tensor) -> torch.Tensor:
+    """Mean mixture entropy across batch and attributes."""
+    return -torch.sum(pi * torch.log(pi + 1e-10), dim=-1).mean()
+
+
+def compute_repulsive_mean_loss(mu: torch.Tensor) -> torch.Tensor:
+    """Small repulsive penalty that encourages component means to separate."""
+    num_components = mu.shape[-1]
+    if num_components <= 1:
+        return torch.tensor(0.0, device=mu.device, dtype=mu.dtype)
+
+    diffs = mu.unsqueeze(-1) - mu.unsqueeze(-2)
+    log_diffs = torch.log(torch.abs(diffs) + 1e-6)
+    mask = torch.triu(torch.ones(num_components, num_components, device=mu.device, dtype=mu.dtype), diagonal=1)
+    normalizer = mask.sum() * log_diffs.shape[:-2].numel() + 1e-8
+    return -((log_diffs * mask).sum() / normalizer)
 
 
 def remove_hooks_and_materialize_meta_parameters(model, device):
@@ -292,6 +312,11 @@ def main():
                 else:
                     pi, mu, s = outputs[3]
                     loss_nll = mdn_nll_loss(residual, pi, mu, s)
+
+                    if args.lambda_entropy != 0.0:
+                        loss_nll = loss_nll - args.lambda_entropy * compute_mixture_entropy(pi)
+                    if args.lambda_repulsive != 0.0:
+                        loss_nll = loss_nll + args.lambda_repulsive * compute_repulsive_mean_loss(mu)
                 
                 loss = loss_mean + args.lambda_nll * loss_nll
             else:
@@ -302,6 +327,11 @@ def main():
                 else:
                     pi, mu, s = outputs[3]
                     loss = mdn_nll_loss(labels, pi, mu, s)
+
+                    if args.lambda_entropy != 0.0:
+                        loss = loss - args.lambda_entropy * compute_mixture_entropy(pi)
+                    if args.lambda_repulsive != 0.0:
+                        loss = loss + args.lambda_repulsive * compute_repulsive_mean_loss(mu)
 
             loss = loss / args.grad_accum_steps
             loss.backward()
@@ -361,7 +391,9 @@ def main():
         val_loss = 0.0
         val_rmse = []
 
-        all_expected_rewards = []
+        all_expected_rewards_norm = []
+        all_expected_rewards_orig = []
+        all_labels_norm = []
         all_labels_orig = []
         all_pi = []
         all_mu = []
@@ -397,8 +429,14 @@ def main():
 
                 val_loss += loss.item()
 
-                all_expected_rewards.append(expected_rewards.cpu())
-                labels_orig = labels.cpu() * attr_stds + attr_means
+                expected_rewards_cpu = expected_rewards.cpu().to(torch.float32)
+                expected_rewards_orig = expected_rewards_cpu * attr_stds + attr_means
+                labels_norm = labels.cpu().to(torch.float32)
+                labels_orig = labels_norm * attr_stds + attr_means
+
+                all_expected_rewards_norm.append(expected_rewards_cpu)
+                all_expected_rewards_orig.append(expected_rewards_orig)
+                all_labels_norm.append(labels_norm)
                 all_labels_orig.append(labels_orig)
                 
                 if args.gaussian:
@@ -410,22 +448,22 @@ def main():
                     all_mu.append(mu.cpu())
                     all_s.append(s.cpu())
 
-                expected_rewards_orig = expected_rewards.cpu() * attr_stds + attr_means
                 rmse = torch.sqrt(torch.mean((expected_rewards_orig - labels_orig) ** 2, dim=0))
                 val_rmse.append(rmse.numpy())
 
         avg_val_loss = val_loss / len(val_loader)
         avg_val_rmse = np.mean(val_rmse, axis=0)
         
-        all_expected_rewards = torch.cat(all_expected_rewards, dim=0)
+        all_expected_rewards_norm = torch.cat(all_expected_rewards_norm, dim=0)
+        all_expected_rewards_orig = torch.cat(all_expected_rewards_orig, dim=0)
+        all_labels_norm = torch.cat(all_labels_norm, dim=0)
         all_labels_orig = torch.cat(all_labels_orig, dim=0)
         all_pi = torch.cat(all_pi, dim=0)
         all_mu = torch.cat(all_mu, dim=0)
         all_s = torch.cat(all_s, dim=0)
         
-        # Calculate validation residuals in original scale
-        # r = y - y_hat
-        residuals_orig = all_labels_orig - all_expected_rewards
+        residuals_norm = all_labels_norm - all_expected_rewards_norm
+        residuals_orig = all_labels_orig - all_expected_rewards_orig
         
         print(f"Epoch {epoch + 1} validation joint loss: {avg_val_loss:.4f}")
         for i, attr in enumerate(ATTRIBUTES):
@@ -433,7 +471,7 @@ def main():
 
         print("\n=== Validation Diagnostics ===")
         print(f"  Target Means (Orig):   {all_labels_orig.mean(dim=0).tolist()}")
-        print(f"  Expected Reward Means (Orig): {all_expected_rewards.mean(dim=0).tolist()}")
+        print(f"  Expected Reward Means (Orig): {all_expected_rewards_orig.mean(dim=0).tolist()}")
         print(f"  Mean Residuals (Orig):  {residuals_orig.mean(dim=0).tolist()}")
         print(f"  Residual RMSE (Orig):  {torch.sqrt((residuals_orig ** 2).mean(dim=0)).tolist()}")
         
@@ -475,6 +513,27 @@ def main():
             checkpoint_path = os.path.join(args.save_dir, "best_mdn_head.pt")
             print(f"Saving best model checkpoint to {checkpoint_path}")
             torch.save(model.score.state_dict(), checkpoint_path)
+            diagnostics_path = os.path.join(args.save_dir, "best_validation_diagnostics.pt")
+            torch.save(
+                {
+                    "attributes": ATTRIBUTES,
+                    "uncertainty_target": args.uncertainty_target,
+                    "gaussian": args.gaussian,
+                    "labels_norm": all_labels_norm,
+                    "labels_orig": all_labels_orig,
+                    "expected_rewards_norm": all_expected_rewards_norm,
+                    "expected_rewards_orig": all_expected_rewards_orig,
+                    "residuals_norm": residuals_norm,
+                    "residuals_orig": residuals_orig,
+                    "pi": all_pi,
+                    "mu": all_mu,
+                    "s": all_s,
+                    "attr_means": attr_means,
+                    "attr_stds": attr_stds,
+                },
+                diagnostics_path,
+            )
+            print(f"Saved validation diagnostics to {diagnostics_path}")
 
     # -------------------------------------------------------------------------
     # Generate and Save Diagnostic Plots at the End of Training
@@ -573,10 +632,8 @@ def main():
     plt.figure(figsize=(8, 8))
     
     # We compute the PIT value using normalized labels and parameters
-    labels_norm_np = all_labels_orig.numpy()  # normalized
-    
     for i, attr in enumerate(ATTRIBUTES):
-        r_vals = residuals_orig_np[:, i] / attr_stds[i].item() # normalized residuals
+        r_vals = residuals_norm.numpy()[:, i]
         
         pi_attr = all_pi[:, i, :].numpy()
         mu_attr = all_mu[:, i, :].numpy()

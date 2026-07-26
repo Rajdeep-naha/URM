@@ -173,6 +173,8 @@ def evaluate_model_pass(model, eval_loader, device, is_baseline=False):
                 
                 data_dict["chosen_scores"].extend(scores_c.cpu().float())
                 data_dict["rejected_scores"].extend(scores_r.cpu().float())
+                data_dict["chosen_mu"].extend(mu_c.cpu().float())
+                data_dict["rejected_mu"].extend(mu_r.cpu().float())
                 data_dict["chosen_sigmas"].extend(sigma_c.cpu().float())
                 data_dict["rejected_sigmas"].extend(sigma_r.cpu().float())
                 data_dict["chosen_weights"].extend(weights_c.cpu().float())
