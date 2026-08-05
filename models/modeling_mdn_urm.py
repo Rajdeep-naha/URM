@@ -29,7 +29,7 @@ class LlamaForSequenceClassificationWithMDN(LlamaForSequenceClassification):
     Custom LLaMA model wrapper that implements the MDN attribute head
     and gating network. Supports both 'label' and 'residual' target modes.
     """
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, gating_cls=None, **kwargs):
         # Allow uncertainty_target to be passed via config or kwargs
         if "uncertainty_target" in kwargs:
             config.uncertainty_target = kwargs.pop("uncertainty_target")
@@ -50,7 +50,9 @@ class LlamaForSequenceClassificationWithMDN(LlamaForSequenceClassification):
         )
         
         # Add the gating network Weights
-        self.weights = Weights(hidden_size=config.hidden_size)
+        if gating_cls is None:
+            gating_cls = Weights
+        self.weights = gating_cls(hidden_size=config.hidden_size)
 
     def forward(
         self,

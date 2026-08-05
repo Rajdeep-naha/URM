@@ -95,7 +95,7 @@ def main():
     os.makedirs("results/analysis", exist_ok=True)
     
     models = {
-        # "Gaussian URM": ("results/baseline_predictions.pt", False, "blue", "-"),
+        "Gaussian URM": ("results/baseline_predictions.pt", False, "blue", "-"),
         "Label MDN": ("results/label_predictions.pt", True, "orange", "--"),
         "Residual MDN": ("results/residual_predictions.pt", True, "green", "-")
     }

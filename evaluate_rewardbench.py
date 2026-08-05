@@ -11,6 +11,7 @@ import csv
 from tqdm import tqdm
 
 from models.modeling_mdn_urm import LlamaForSequenceClassificationWithMDN
+
 from models.distribution_statistics import compute_statistics, mixture_variance, mixture_std, mixture_mad0
 from evaluation.scoring import (
     get_urm_score,
@@ -94,6 +95,7 @@ def parse_args():
     parser.add_argument("--baseline", action="store_true", help="Evaluate the pre-trained standard URM baseline")
     parser.add_argument("--dataset_name", type=str, default="allenai/reward-bench", help="Hugging Face dataset name")
     parser.add_argument("--dataset_split", type=str, default="filtered", help="Dataset split to evaluate")
+    parser.add_argument("--gating_variant", type=str, default="gaussian", choices=["gaussian", "residual"], help="Which gating network implementation to use")
     
     # CLI options for plug-in framework
     parser.add_argument("--reward-score", type=str, default="urm", choices=["urm", "risk_variance", "risk_variance_only", "risk_mad"],
@@ -168,6 +170,7 @@ def main():
             eos_token_id=tokenizer.eos_token_id or 2,
             num_components=args.num_components,
             use_gaussian=args.gaussian,
+            gating_cls=ResidualGating if args.gating_variant == "residual" else None
         )
         model = LlamaForSequenceClassificationWithMDN(config)
     elif args.baseline:
@@ -190,6 +193,8 @@ def main():
             device_map=args.device_map,
             num_components=args.num_components,
             use_gaussian=args.gaussian,
+            gating_cls=None,
+            uncertainty_target="residual" if args.gating_variant == "residual" else "label"
         )
         
         # Check device of score.proj.weight or weights.fc
@@ -202,9 +207,12 @@ def main():
             print(f"Loading trained MDN Head weights from {args.mdn_head_weights}...")
             model.score.load_state_dict(torch.load(args.mdn_head_weights, map_location="cpu"))
         
-        if os.path.exists(args.gating_weights):
-            print(f"Loading trained Gating weights from {args.gating_weights}...")
-            model.weights.load_state_dict(torch.load(args.gating_weights, map_location="cpu"))
+        target_gating_weights = args.gating_weights
+        if os.path.exists(target_gating_weights):
+            print(f"Loading trained Gating weights from {target_gating_weights}...")
+            model.weights.load_state_dict(torch.load(target_gating_weights, map_location="cpu"))
+        else:
+            print(f"Warning: Trained Gating weights not found at {target_gating_weights}. Using randomly initialized gating network.")
 
     if not hasattr(model, "hf_device_map"):
         model.to(device)
@@ -259,7 +267,7 @@ def main():
                 else:
                     chosen_pi, chosen_mu, chosen_s = chosen_outputs[3]
                     stats = compute_statistics(chosen_pi, chosen_mu, chosen_s)
-                    chosen_base_scores = get_urm_score(stats["mean"], chosen_weights)
+                    chosen_base_scores = get_urm_score(chosen_outputs[2], chosen_weights)
                     chosen_seq_vars = get_urm_uncertainty(stats["variance"], chosen_weights)
                     chosen_seq_mads = get_mad_uncertainty(stats["mad0"], chosen_weights)
             
@@ -287,7 +295,7 @@ def main():
                 else:
                     rejected_pi, rejected_mu, rejected_s = rejected_outputs[3]
                     stats = compute_statistics(rejected_pi, rejected_mu, rejected_s)
-                    rejected_base_scores = get_urm_score(stats["mean"], rejected_weights)
+                    rejected_base_scores = get_urm_score(rejected_outputs[2], rejected_weights)
                     rejected_seq_vars = get_urm_uncertainty(stats["variance"], rejected_weights)
                     rejected_seq_mads = get_mad_uncertainty(stats["mad0"], rejected_weights)
 

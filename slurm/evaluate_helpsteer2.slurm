@@ -1,0 +1,43 @@
+#!/bin/bash
+#SBATCH --job-name=hs2_eval
+#SBATCH --output=/localstorage/home/f20221218/URM/results/slurm/hs2_eval_%j.out
+#SBATCH --error=/localstorage/home/f20221218/URM/results/slurm/hs2_eval_%j.err
+#SBATCH --time=02:00:00
+#SBATCH --partition=h100-mig
+#SBATCH --account=students-limited
+#SBATCH --qos=student-1mig-limited
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=30G
+#SBATCH --gres=gpu:nvidia_h100_nvl_1g.12gb:1
+
+set -euo pipefail
+
+PROJECT_ROOT="/localstorage/home/f20221218/URM"
+VENV_PYTHON="$PROJECT_ROOT/venv/bin/python"
+
+mkdir -p "$PROJECT_ROOT/results/slurm"
+mkdir -p "$PROJECT_ROOT/results/helpsteer2_eval/caches"
+cd "$PROJECT_ROOT"
+
+export PYTHONUNBUFFERED=1
+export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
+export HF_HOME="$PROJECT_ROOT/.cache/huggingface"
+export HF_DATASETS_CACHE="$PROJECT_ROOT/.cache/huggingface/datasets"
+export HF_TOKEN="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"
+export MPLCONFIGDIR="$PROJECT_ROOT/.cache/matplotlib"
+export WANDB_MODE=offline
+
+echo "Job started on $(date)"
+echo "Running on node: $(hostname)"
+nvidia-smi
+
+"$VENV_PYTHON" evaluate_helpsteer2.py \
+    --model_name_or_path /localstorage/home/f20221218/URM-LLaMa-3.1-8B \
+    --label_mdn_weights checkpoints/stage1/best_mdn_head_label.pt \
+    --residual_mdn_weights checkpoints/stage1/best_mdn_head_residual.pt \
+    --batch_size 4 \
+    --save_dir results/helpsteer2_eval \
+    --cache_dir results/helpsteer2_eval/caches
+
+echo "Job finished on $(date)"
