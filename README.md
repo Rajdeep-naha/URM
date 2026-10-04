@@ -222,3 +222,46 @@ If you use this code, please cite the original URM paper:
 ## License
 
 This project is for research purposes. The baseline URM model follows its original license terms.
+
+
+---
+
+# RewardUQ: Uncertainty-Aware Reward Modeling
+
+RewardUQ is a research framework for training and evaluating **Uncertainty-Aware Reward Models** (URMs) based on Large Language Models. 
+
+This repository currently implements and extends the **Residual Mixture Density Network (MDN)** approach on top of QLoRA-finetuned causal language models (such as LLaMa-3-8B).
+
+## Features
+- **Residual MDN Head**: Predicts a base scalar reward alongside an explicit uncertainty distribution parameterization (means, variances, mixture weights) across multiple attributes (e.g. helpfulness, correctness, coherence, complexity, verbosity).
+- **QLoRA Integration**: Leverages HuggingFace `peft` and `bitsandbytes` to efficiently train full reward architectures natively in 4-bit precision without OOMing on a single 12GB GPU.
+- **Robust Pipeline**: Includes a unified data pipeline that explicitly bypasses common TRL tokenization bugs, cleanly mapping HelpSteer attribute annotations directly into custom PyTorch loss components.
+
+## Getting Started
+
+### 1. Installation
+First, ensure you have your virtual environment activated, then install the local package:
+```bash
+pip install -e .
+```
+> **Note**: DeepSpeed is deliberately not used for single-GPU QLoRA runs in this pipeline to prevent Triton kernel compilation failures. Do not install it unless you are scaling to multi-GPU clusters.
+
+### 2. Dataset
+The framework expects pairs of annotated completions. Ensure your dataset is formatted as JSONL and placed at `data/joined_pairs.jsonl`. 
+
+### 3. Training
+You can launch the training job using SLURM. The wrapper script is located in your workspace root (`slurm_qlora.sh`). 
+
+To run it locally:
+```bash
+python ../train_qlora.py
+```
+This script automatically applies a 4-bit NormalFloat configuration and pre-tokenizes the input responses before initializing the custom `ResidualMDNTrainer`.
+
+### 4. Evaluation
+Check the `slurm/evaluate_residual.slurm` scripts for running evaluation benchmarks on your trained checkpoints.
+
+## Recent Fixes
+- Added robust dataset handling to prevent `input_ids_chosen` collisions in older TRL versions.
+- Disabled `trl` implicit renaming to safely feed `r1`/`r2` annotations to the Custom MDN Collator.
+- Integrated `BitsAndBytesConfig` natively into pipeline initialization to fix `CUDA out of memory` errors on 12GB partitions.
