@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-PROJECT_ROOT="/localstorage/home/f20221218/ALD"
+PROJECT_ROOT="/localstorage/home/f20221218/URM"
 VENV_PYTHON="/localstorage/home/f20221218/URM/venv/bin/python"
 
 mkdir -p "/localstorage/home/f20221218/URM/results/slurm"
@@ -38,7 +38,7 @@ echo "==========================================="
 
 echo ""
 echo "=== Running QLoRA Training ==="
-"$VENV_PYTHON" python train_qlora.py
+"$VENV_PYTHON" train_qlora.py
 
 echo "QLoRA MDN training finished successfully!"
 echo "==========================================="
