@@ -20,7 +20,7 @@ mkdir -p "/localstorage/home/f20221218/URM/results/slurm"
 cd "$PROJECT_ROOT"
 
 export PYTHONUNBUFFERED=1
-export PYTHONPATH="${PROJECT_ROOT}/rewarduq/src:${PYTHONPATH:-}"
+export PYTHONPATH="/localstorage/home/f20221218/ALD/rewarduq/src:${PYTHONPATH:-}"
 export HF_HOME="/localstorage/home/f20221218/URM/.cache/huggingface"
 export HF_DATASETS_CACHE="/localstorage/home/f20221218/URM/.cache/huggingface/datasets"
 export HF_TOKEN="YOUR_HF_TOKEN_HERE"
