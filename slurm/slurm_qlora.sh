@@ -23,7 +23,7 @@ export PYTHONUNBUFFERED=1
 export PYTHONPATH="${PROJECT_ROOT}/rewarduq/src:${PYTHONPATH:-}"
 export HF_HOME="/localstorage/home/f20221218/URM/.cache/huggingface"
 export HF_DATASETS_CACHE="/localstorage/home/f20221218/URM/.cache/huggingface/datasets"
-export HF_TOKEN="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"
+export HF_TOKEN="YOUR_HF_TOKEN_HERE"
 export TRITON_CACHE_DIR="/localstorage/home/f20221218/URM/.cache/triton"
 export WANDB_MODE=offline
 
